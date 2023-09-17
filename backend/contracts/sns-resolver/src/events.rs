@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Symbol, String};
+use soroban_sdk::{Address, BytesN, Env, String, Symbol};
 
 pub(crate) fn set_name(e: &Env, name: Address, node: BytesN<32>) {
     let topics = (Symbol::new(e, "new_name_resolution"), name);

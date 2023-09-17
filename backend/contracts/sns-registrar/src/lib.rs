@@ -1,15 +1,18 @@
+// #![deny(warnings)]
 #![no_std]
 use core::panic;
 
 use sns_registry_interface::SnsRegistryClient;
 use sns_resolver_interface::SnsResolverClient;
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, Bytes, String};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, token, Address, Bytes, BytesN, Env, String,
+};
 
 mod events;
 mod test;
 mod testutils;
 
-pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 60 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 518400; // 60 days
 pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 30 days
 pub(crate) const GRACE_PERIOD: u64 = 1555200; // 90 days
 
@@ -188,11 +191,7 @@ impl SnsRegistrar {
         set_domain_expiry(&e, &name, &new_expiry_date);
 
         let registry_client = SnsRegistryClient::new(&e, &registry);
-        registry_client.bump_subnode(
-            &e.current_contract_address(),
-            &base_node,
-            &name,
-        );
+        registry_client.bump_subnode(&e.current_contract_address(), &base_node, &name);
 
         new_expiry_date
     }
@@ -210,11 +209,7 @@ impl SnsRegistrar {
         let sub_node = append_hash(&e, &base_node, &name);
 
         let registry_client = SnsRegistryClient::new(&e, &registry);
-        registry_client.set_owner(
-            &e.current_contract_address(),
-            &sub_node,
-            &new_owner,
-        );
+        registry_client.set_owner(&e.current_contract_address(), &sub_node, &new_owner);
     }
 
     pub fn withdraw_funds(e: Env, caller: Address, amount: i128) {
@@ -247,7 +242,13 @@ impl SnsRegistrar {
         set_resolver_text(&e, &sub_node, &text, &default_resolver);
     }
 
-    pub fn set_resolver_details(e: Env, caller: Address, node: BytesN<32>, text: String, name: Address) {
+    pub fn set_resolver_details(
+        e: Env,
+        caller: Address,
+        node: BytesN<32>,
+        text: String,
+        name: Address,
+    ) {
         caller.require_auth();
         require_owner(&e, &node, &caller);
 
@@ -271,7 +272,7 @@ impl SnsRegistrar {
 
     pub fn is_administrator(e: Env, caller: Address) -> bool {
         get_administrator(&e) == caller
-    }    
+    }
 
     pub fn withdrawable_balance(e: Env) -> i128 {
         let native_token_id = get_native_token(&e);
@@ -433,14 +434,10 @@ fn set_domain_expiry(e: &Env, node: &BytesN<32>, expiry: &u64) {
 }
 
 fn set_domain_price(e: &Env, price: &i128) {
+    e.storage().persistent().set(&DataKey::Price, price);
     e.storage()
         .persistent()
-        .set(&DataKey::Price, price);
-    e.storage().persistent().bump(
-        &DataKey::Price,
-        LOW_BUMP_AMOUNT,
-        HIGH_BUMP_AMOUNT,
-    );
+        .bump(&DataKey::Price, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_registry(e: &Env, registry: &Address) {
@@ -460,9 +457,7 @@ fn set_native_token(e: &Env, native_token: &Address) {
 }
 
 fn set_resolver(e: &Env, resolver: &Address) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::Resolver, resolver);
+    e.storage().persistent().set(&DataKey::Resolver, resolver);
     e.storage()
         .persistent()
         .bump(&DataKey::Resolver, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
@@ -482,19 +477,25 @@ fn set_administrator(e: &Env, caller: &Address) {
         .bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
-fn set_resolver_name(e: &Env, sub_node: &BytesN<32>, name: &Address, default_resolver: &Address) {    
+fn set_resolver_name(e: &Env, sub_node: &BytesN<32>, name: &Address, default_resolver: &Address) {
     let resolver_client = SnsResolverClient::new(&e, default_resolver);
 
     resolver_client.set_name(&e.current_contract_address(), sub_node, name);
 }
 
-fn set_resolver_text(e: &Env, sub_node: &BytesN<32>, text: &String, default_resolver: &Address) {    
+fn set_resolver_text(e: &Env, sub_node: &BytesN<32>, text: &String, default_resolver: &Address) {
     let resolver_client = SnsResolverClient::new(&e, default_resolver);
 
     resolver_client.set_text(&e.current_contract_address(), sub_node, text);
 }
 
-fn set_resolver_details(e: &Env, sub_node: &BytesN<32>, name: &Address, text: &String, default_resolver: &Address) {    
+fn set_resolver_details(
+    e: &Env,
+    sub_node: &BytesN<32>,
+    name: &Address,
+    text: &String,
+    default_resolver: &Address,
+) {
     let resolver_client = SnsResolverClient::new(&e, default_resolver);
 
     resolver_client.set_name(&e.current_contract_address(), sub_node, name);

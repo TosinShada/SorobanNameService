@@ -9,7 +9,7 @@ mod events;
 mod test;
 mod testutils;
 
-pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 60 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 518400; // 30 days
 pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 30 days
 
 #[derive(Clone)]
@@ -22,7 +22,7 @@ pub enum DataKey {
     // () => Admin Address
     Admin,
     // () => Resolver Address
-    DefaultResolver
+    DefaultResolver,
 }
 
 #[contract]
@@ -67,7 +67,7 @@ impl SnsRegistryTrait for SnsRegistry {
         label: BytesN<32>,
         owner: Address,
         resolver: Address,
-        ttl: u64
+        ttl: u64,
     ) {
         caller.require_auth();
         require_node_authorised(&e, &node, &caller);
@@ -198,12 +198,18 @@ State Changing Functions
 */
 fn set_administrator(e: &Env, caller: &Address) {
     e.storage().persistent().set(&DataKey::Admin, caller);
-    e.storage().persistent().bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_default_resolver(e: &Env, resolver: &Address) {
-    e.storage().persistent().set(&DataKey::DefaultResolver, resolver);
-    e.storage().persistent().bump(&DataKey::DefaultResolver, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .set(&DataKey::DefaultResolver, resolver);
+    e.storage()
+        .persistent()
+        .bump(&DataKey::DefaultResolver, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_owner(e: &Env, node: &BytesN<32>, owner: &Address) {
@@ -212,9 +218,11 @@ fn set_owner(e: &Env, node: &BytesN<32>, owner: &Address) {
     e.storage()
         .persistent()
         .set(&DataKey::Records(node.clone()), &record);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Records(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Records(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 }
 
 fn set_resolver_ttl(e: &Env, node: &BytesN<32>, resolver: &Address, ttl: &u64) {
@@ -224,9 +232,11 @@ fn set_resolver_ttl(e: &Env, node: &BytesN<32>, resolver: &Address, ttl: &u64) {
     e.storage()
         .persistent()
         .set(&DataKey::Records(node.clone()), &record);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Records(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Records(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 }
 
 fn set_resolver(e: &Env, node: &BytesN<32>, resolver: &Address) {
@@ -235,9 +245,11 @@ fn set_resolver(e: &Env, node: &BytesN<32>, resolver: &Address) {
     e.storage()
         .persistent()
         .set(&DataKey::Records(node.clone()), &record);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Records(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Records(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 }
 
 fn set_ttl(e: &Env, node: &BytesN<32>, ttl: &u64) {
@@ -246,9 +258,11 @@ fn set_ttl(e: &Env, node: &BytesN<32>, ttl: &u64) {
     e.storage()
         .persistent()
         .set(&DataKey::Records(node.clone()), &record);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Records(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Records(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 }
 
 fn set_parent_node_owner(e: &Env, node: &BytesN<32>, owner: &Address) {
@@ -256,7 +270,14 @@ fn set_parent_node_owner(e: &Env, node: &BytesN<32>, owner: &Address) {
     events::new_owner(e, owner.clone(), node.clone());
 }
 
-fn set_subnode_owner(e: &Env, node: &BytesN<32>, label: &BytesN<32>, owner: &Address, resolver: &Address, ttl: &u64) {
+fn set_subnode_owner(
+    e: &Env,
+    node: &BytesN<32>,
+    label: &BytesN<32>,
+    owner: &Address,
+    resolver: &Address,
+    ttl: &u64,
+) {
     if !has_record(e, node) {
         panic!("node does not exist");
     }
@@ -274,7 +295,7 @@ fn set_approval_for_all(e: &Env, operator: &Address, caller: &Address, approved:
     );
     e.storage().persistent().bump(
         &DataKey::Operators(operator.clone(), caller.clone()),
-        LOW_BUMP_AMOUNT, 
+        LOW_BUMP_AMOUNT,
         HIGH_BUMP_AMOUNT,
     );
 
@@ -283,9 +304,11 @@ fn set_approval_for_all(e: &Env, operator: &Address, caller: &Address, approved:
 
 fn bump_subnode(e: &Env, node: &BytesN<32>, label: &BytesN<32>) {
     let subnode = append_hash(e, node, label);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Records(subnode.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Records(subnode.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 }
 
 fn append_hash(env: &Env, parent_hash: &BytesN<32>, leaf_hash: &BytesN<32>) -> BytesN<32> {

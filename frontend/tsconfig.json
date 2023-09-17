@@ -1,13 +1,12 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "rootDir": "src",
-    "target": "es6",
+    "target": "es2020",
     "lib": [
       "dom",
       "dom.iterable",
       "esnext"
     ],
+    "downlevelIteration": true,
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,20 +19,24 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "apexcharts": [
-        "./node_modules/apexcharts-clevision"
+      "@/*": ["./*"],
+      "mock-token": [
+        "./node_modules/mock-token/dist/cjs/index.d.ts"
       ],
-      "apexcharts/*": [
-        "./node_modules/apexcharts-clevision/*"
+      "streamdapp-contract": [
+        "./node_modules/streamdapp-contract/dist/cjs/index.d.ts"
       ],
     }
   },
-  "include": [
-    "src",
-    "declaration.d.ts"
-  ],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "target"
   ]
 }

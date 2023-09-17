@@ -9,10 +9,14 @@ use sns_registry_interface::SnsRegistryClient;
 use sns_resolver_interface::SnsResolverClient;
 use soroban_sdk::{
     testutils::{Address as AddressTestTrait, Ledger},
-    Address, Bytes, BytesN, Env, token
+    token, Address, Bytes, BytesN, Env,
 };
 
-fn create_registry_contract<'a>(e: &Env, admin: &Address, resolver: &Address) -> (Address, SnsRegistryClient<'a>) {
+fn create_registry_contract<'a>(
+    e: &Env,
+    admin: &Address,
+    resolver: &Address,
+) -> (Address, SnsRegistryClient<'a>) {
     let registry_id = register_registry(e);
 
     let registry: SnsRegistryClient<'_> = SnsRegistryClient::new(&e, &registry_id);
@@ -81,15 +85,22 @@ impl Setup<'_> {
 
         let registrar_address = register_sns(&e);
         let (resolver_address, resolver) = create_resolver_contract(&e, &registrar_address);
-        let (registry_address, registry) = create_registry_contract(&e, &registrar_address, &resolver_address);
+        let (registry_address, registry) =
+            create_registry_contract(&e, &registrar_address, &resolver_address);
         let (token_client, token_asset_client) = create_token_contract(&e, &admin_user);
 
-        token_asset_client.mock_all_auths().mint(&admin_user, &100000000000000);
+        token_asset_client
+            .mock_all_auths()
+            .mint(&admin_user, &100000000000000);
 
         let registrar = SnsRegistrar::new(&e, registrar_address.clone());
-        registrar
-            .client()
-            .initialize(&registry_address, &admin_user, &resolver_address, &base_node, &token_client.address);
+        registrar.client().initialize(
+            &registry_address,
+            &admin_user,
+            &resolver_address,
+            &base_node,
+            &token_client.address,
+        );
 
         Self {
             env: e,
@@ -117,7 +128,10 @@ fn test_transfer_contract_ownership() {
 
     assert_eq!(
         true,
-        setup.registrar.client().is_administrator(&setup.backup_admin_user)
+        setup
+            .registrar
+            .client()
+            .is_administrator(&setup.backup_admin_user)
     );
 }
 
@@ -131,7 +145,10 @@ fn test_set_resolver() {
         .mock_all_auths()
         .set_resolver(&setup.admin_user, &setup.resolver_address);
 
-    assert_eq!(setup.resolver_address, setup.registry.resolver(&setup.base_node));
+    assert_eq!(
+        setup.resolver_address,
+        setup.registry.resolver(&setup.base_node)
+    );
 }
 
 #[test]
