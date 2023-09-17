@@ -14,14 +14,12 @@ pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 60 days
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    // Registry Contract Address
-    // () => Address
-    Registry(BytesN<32>),
     // BytesN<32> => Address
+    // The nodes in this contract is the hash of the full node (eg. test.sns) and not only the label (eg. test)
     Names(BytesN<32>),
     // BytesN<32> => Vec<String>
     Texts(BytesN<32>),
-    // Admin of this contract
+    // Admin of this contract which is the Registrar contract
     // () => Address
     Admin,
 }
@@ -39,23 +37,15 @@ impl SnsResolverTrait for SnsResolver {
         set_administrator(&e, &admin);
     }
 
-    fn set_registry(e: Env, caller: Address, node: BytesN<32>, registry: Address) {
-        caller.require_auth();
-        require_administrator(&e, &caller);
-        set_registry(&e, &node, &registry);
-    }
-
     fn set_name(e: Env, caller: Address, node: BytesN<32>, name: Address) {
         caller.require_auth();
-        // commented out to allow anyone to set name
-        // require_administrator(&e, &caller);
+        require_administrator(&e, &caller);
         set_name(&e, &node, &name);
     }
 
     fn set_text(e: Env, caller: Address, node: BytesN<32>, text: String) {
         caller.require_auth();
-        // commented out to allow anyone to set name
-        // require_administrator(&e, &caller);
+        require_administrator(&e, &caller);
         set_text(&e, &node, &text);
     }
 
@@ -71,10 +61,6 @@ impl SnsResolverTrait for SnsResolver {
 
     fn text(e: Env, node: BytesN<32>) -> Vec<String> {
         get_text(&e, &node)
-    }
-
-    fn registry(e: Env, node: BytesN<32>) -> Address {
-        get_registry(&e, &node)
     }
 }
 
@@ -106,13 +92,6 @@ fn get_text(e: &Env, node: &BytesN<32>) -> Vec<String> {
         .unwrap_or(Vec::new(&e))
 }
 
-fn get_registry(e: &Env, node: &BytesN<32>) -> Address {
-    e.storage()
-        .persistent()
-        .get::<_, Address>(&DataKey::Registry(node.clone()))
-        .expect("No registry found")
-}
-
 /*
 Modifiers for the contract
 */
@@ -128,9 +107,13 @@ fn set_name(e: &Env, node: &BytesN<32>, name: &Address) {
     e.storage()
         .persistent()
         .set(&DataKey::Names(node.clone()), name);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Names(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Names(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
+
+    events::set_name(&e, name.clone(), node.clone());
 }
 
 fn set_text(e: &Env, node: &BytesN<32>, text: &String) {
@@ -139,23 +122,20 @@ fn set_text(e: &Env, node: &BytesN<32>, text: &String) {
     e.storage()
         .persistent()
         .set(&DataKey::Texts(node.clone()), &texts);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Texts(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
-}
+    e.storage().persistent().bump(
+        &DataKey::Texts(node.clone()),
+        LOW_BUMP_AMOUNT,
+        HIGH_BUMP_AMOUNT,
+    );
 
-fn set_registry(e: &Env, node: &BytesN<32>, registry: &Address) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::Registry(node.clone()), registry);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Registry(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    events::set_text(&e, node.clone(), text.clone());
 }
 
 fn set_administrator(e: &Env, caller: &Address) {
     e.storage().persistent().set(&DataKey::Admin, caller);
-    e.storage().persistent().bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn remove_record(e: &Env, node: &BytesN<32>) {
@@ -165,4 +145,6 @@ fn remove_record(e: &Env, node: &BytesN<32>) {
     e.storage()
         .persistent()
         .remove(&DataKey::Texts(node.clone()));
+
+    events::remove_name(&e, node.clone());
 }

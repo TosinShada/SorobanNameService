@@ -9,11 +9,9 @@ pub struct Spec;
 #[contractclient(name = "SnsResolverClient")]
 pub trait SnsResolverTrait {
     fn initialize(e: Env, admin: Address);
-    fn set_registry(e: Env, caller: Address, node: BytesN<32>, registry: Address);
     fn set_name(e: Env, caller: Address, node: BytesN<32>, name: Address);
     fn set_text(e: Env, caller: Address, node: BytesN<32>, text: String);
     fn remove(e: Env, caller: Address, node: BytesN<32>);
     fn name(e: Env, node: BytesN<32>) -> Address;
     fn text(e: Env, node: BytesN<32>) -> Vec<String>;
-    fn registry(e: Env, node: BytesN<32>) -> Address;
 }
