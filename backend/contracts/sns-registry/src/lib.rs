@@ -1,4 +1,4 @@
-// #![deny(warnings)]
+#![deny(warnings)]
 #![no_std]
 use core::panic;
 
@@ -9,7 +9,7 @@ mod events;
 mod test;
 mod testutils;
 
-pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 30 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 60 days
 pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 30 days
 
 #[derive(Clone)]
@@ -86,10 +86,9 @@ impl SnsRegistryTrait for SnsRegistry {
         set_ttl(&e, &node, &ttl);
     }
 
-    fn bump_subnode(e: Env, caller: Address, node: BytesN<32>, label: BytesN<32>, duration: u64, grace_period: u64) {
+    fn bump_subnode(e: Env, caller: Address, node: BytesN<32>, label: BytesN<32>) {
         caller.require_auth();
-        require_node_authorised(&e, &node, &caller);
-        bump_subnode(&e, &node, &label, &duration, &grace_period);
+        bump_subnode(&e, &node, &label);
     }
 
     fn set_approval_for_all(e: Env, caller: Address, operator: Address, approved: bool) {
@@ -183,10 +182,6 @@ fn is_operator_approved(e: &Env, operator: &Address, owner: &Address) -> bool {
         .unwrap_or(false)
 }
 
-fn convert_u64_to_u32(number: &u64) -> u32 {
-    Some(number.clone() as u32).unwrap_or(u32::MAX)
-}
-
 /*
 Modifiers for the contract
 */
@@ -269,7 +264,7 @@ fn set_subnode_owner(e: &Env, node: &BytesN<32>, label: &BytesN<32>, owner: &Add
     set_owner(e, &subnode, owner);
     events::transfer_owner(&e, node.clone(), label.clone(), owner.clone());
     set_resolver(&e, &subnode, &resolver);
-    set_ttl(&e, &node, &ttl)
+    set_ttl(&e, &subnode, &ttl)
 }
 
 fn set_approval_for_all(e: &Env, operator: &Address, caller: &Address, approved: &bool) {
@@ -286,13 +281,11 @@ fn set_approval_for_all(e: &Env, operator: &Address, caller: &Address, approved:
     events::set_approval_for_all(&e, operator.clone(), caller.clone(), approved.clone());
 }
 
-fn bump_subnode(e: &Env, node: &BytesN<32>, label: &BytesN<32>, duration: &u64, grace_period: &u64) {
+fn bump_subnode(e: &Env, node: &BytesN<32>, label: &BytesN<32>) {
     let subnode = append_hash(e, node, label);
-    let duration_u32 = convert_u64_to_u32(duration);
-    let grace_u32 = convert_u64_to_u32(grace_period);
     e.storage()
         .persistent()
-        .bump(&DataKey::Records(subnode.clone()), duration_u32, duration_u32.saturating_add(grace_u32));
+        .bump(&DataKey::Records(subnode.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn append_hash(env: &Env, parent_hash: &BytesN<32>, leaf_hash: &BytesN<32>) -> BytesN<32> {

@@ -33,7 +33,7 @@ pub trait SnsRegistryTrait {
         label: BytesN<32>,
         owner: Address,
         resolver: Address,
-        ttl: u64
+        ttl: u64,
     );
     fn set_resolver(e: Env, caller: Address, node: BytesN<32>, resolver: Address);
     fn set_ttl(e: Env, caller: Address, node: BytesN<32>, ttl: u64);
@@ -41,7 +41,7 @@ pub trait SnsRegistryTrait {
     fn owner(e: Env, node: BytesN<32>) -> Address;
     fn resolver(e: Env, node: BytesN<32>) -> Address;
     fn ttl(e: Env, node: BytesN<32>) -> u64;
-    fn bump_subnode(e: Env, caller: Address, node: BytesN<32>, label: BytesN<32>, duration: u64, grace_period: u64);
+    fn bump_subnode(e: Env, caller: Address, node: BytesN<32>, label: BytesN<32>);
     fn record(e: Env, node: BytesN<32>) -> Record;
     fn record_exist(e: Env, node: BytesN<32>) -> bool;
     fn is_approved_for_all(e: Env, operator: Address, owner: Address) -> bool;

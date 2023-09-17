@@ -9,12 +9,22 @@ mod registry_contract {
     );
 }
 
+mod resolver_contract {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32-unknown-unknown/release/sns_resolver.wasm"
+    );
+}
+
 pub fn register_test_contract(e: &Env) -> Address {
     e.register_contract(None, crate::SnsRegistrar {})
 }
 
 pub fn register_registry(e: &Env) -> Address {
     e.register_contract_wasm(None, registry_contract::WASM)
+}
+
+pub fn register_resolver(e: &Env) -> Address {
+    e.register_contract_wasm(None, resolver_contract::WASM)
 }
 
 pub struct SnsRegistrar {

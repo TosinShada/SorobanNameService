@@ -922,6 +922,7 @@ name = "sns-registrar"
 version = "0.0.0"
 dependencies = [
  "sns-registry-interface",
+ "sns-resolver-interface",
  "soroban-sdk",
 ]
 

@@ -109,12 +109,16 @@ fn test_set_subnode_owner() {
         &setup.node_owner,
         &node,
         &label,
-        &setup.node_owner,
+        &setup.subnode_owner,
+        &setup.resolver,
+        &10,
     );
 
     let sns_record = setup.sns.client().record(&subnode);
 
-    assert_eq!(sns_record.owner, setup.node_owner);
+    assert_eq!(sns_record.owner, setup.subnode_owner);
+    assert_eq!(sns_record.resolver, setup.resolver);
+    assert_eq!(sns_record.ttl, 10);
 }
 
 #[test]

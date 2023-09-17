@@ -8,8 +8,8 @@ mod events;
 mod test;
 mod testutils;
 
-pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 30 days
-pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 60 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 60 days
+pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 30 days
 
 #[derive(Clone)]
 #[contracttype]
