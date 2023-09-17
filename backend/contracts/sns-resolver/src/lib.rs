@@ -1,13 +1,15 @@
 #![no_std]
 use core::panic;
 
+use sns_resolver_interface::SnsResolverTrait;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, String, Vec};
 
 mod events;
 mod test;
 mod testutils;
 
-pub(crate) const BUMP_AMOUNT: u32 = 518400; // 30 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 30 days
+pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 60 days
 
 #[derive(Clone)]
 #[contracttype]
@@ -22,6 +24,58 @@ pub enum DataKey {
     // Admin of this contract
     // () => Address
     Admin,
+}
+
+#[contract]
+struct SnsResolver;
+
+#[contractimpl]
+#[allow(clippy::needless_pass_by_value)]
+impl SnsResolverTrait for SnsResolver {
+    fn initialize(e: Env, admin: Address) {
+        if has_administrator(&e) {
+            panic!("already initialized")
+        }
+        set_administrator(&e, &admin);
+    }
+
+    fn set_registry(e: Env, caller: Address, node: BytesN<32>, registry: Address) {
+        caller.require_auth();
+        require_administrator(&e, &caller);
+        set_registry(&e, &node, &registry);
+    }
+
+    fn set_name(e: Env, caller: Address, node: BytesN<32>, name: Address) {
+        caller.require_auth();
+        // commented out to allow anyone to set name
+        // require_administrator(&e, &caller);
+        set_name(&e, &node, &name);
+    }
+
+    fn set_text(e: Env, caller: Address, node: BytesN<32>, text: String) {
+        caller.require_auth();
+        // commented out to allow anyone to set name
+        // require_administrator(&e, &caller);
+        set_text(&e, &node, &text);
+    }
+
+    fn remove(e: Env, caller: Address, node: BytesN<32>) {
+        caller.require_auth();
+        require_administrator(&e, &caller);
+        remove_record(&e, &node);
+    }
+
+    fn name(e: Env, node: BytesN<32>) -> Address {
+        get_name(&e, &node)
+    }
+
+    fn text(e: Env, node: BytesN<32>) -> Vec<String> {
+        get_text(&e, &node)
+    }
+
+    fn registry(e: Env, node: BytesN<32>) -> Address {
+        get_registry(&e, &node)
+    }
 }
 
 /*
@@ -76,7 +130,7 @@ fn set_name(e: &Env, node: &BytesN<32>, name: &Address) {
         .set(&DataKey::Names(node.clone()), name);
     e.storage()
         .persistent()
-        .bump(&DataKey::Names(node.clone()), BUMP_AMOUNT);
+        .bump(&DataKey::Names(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_text(e: &Env, node: &BytesN<32>, text: &String) {
@@ -87,7 +141,7 @@ fn set_text(e: &Env, node: &BytesN<32>, text: &String) {
         .set(&DataKey::Texts(node.clone()), &texts);
     e.storage()
         .persistent()
-        .bump(&DataKey::Texts(node.clone()), BUMP_AMOUNT);
+        .bump(&DataKey::Texts(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_registry(e: &Env, node: &BytesN<32>, registry: &Address) {
@@ -96,12 +150,12 @@ fn set_registry(e: &Env, node: &BytesN<32>, registry: &Address) {
         .set(&DataKey::Registry(node.clone()), registry);
     e.storage()
         .persistent()
-        .bump(&DataKey::Registry(node.clone()), BUMP_AMOUNT);
+        .bump(&DataKey::Registry(node.clone()), LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_administrator(e: &Env, caller: &Address) {
     e.storage().persistent().set(&DataKey::Admin, caller);
-    e.storage().persistent().bump(&DataKey::Admin, BUMP_AMOUNT);
+    e.storage().persistent().bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn remove_record(e: &Env, node: &BytesN<32>) {
@@ -111,56 +165,4 @@ fn remove_record(e: &Env, node: &BytesN<32>) {
     e.storage()
         .persistent()
         .remove(&DataKey::Texts(node.clone()));
-}
-
-#[contract]
-struct SnsResolver;
-
-#[contractimpl]
-#[allow(clippy::needless_pass_by_value)]
-impl SnsResolver {
-    pub fn initialize(e: Env, admin: Address) {
-        if has_administrator(&e) {
-            panic!("already initialized")
-        }
-        set_administrator(&e, &admin);
-    }
-
-    pub fn set_registry(e: Env, caller: Address, node: BytesN<32>, registry: Address) {
-        caller.require_auth();
-        require_administrator(&e, &caller);
-        set_registry(&e, &node, &registry);
-    }
-
-    pub fn set_name(e: Env, caller: Address, node: BytesN<32>, name: Address) {
-        caller.require_auth();
-        // commented out to allow anyone to set name
-        // require_administrator(&e, &caller);
-        set_name(&e, &node, &name);
-    }
-
-    pub fn set_text(e: Env, caller: Address, node: BytesN<32>, text: String) {
-        caller.require_auth();
-        // commented out to allow anyone to set name
-        // require_administrator(&e, &caller);
-        set_text(&e, &node, &text);
-    }
-
-    pub fn remove(e: Env, caller: Address, node: BytesN<32>) {
-        caller.require_auth();
-        require_administrator(&e, &caller);
-        remove_record(&e, &node);
-    }
-
-    pub fn name(e: Env, node: BytesN<32>) -> Address {
-        get_name(&e, &node)
-    }
-
-    pub fn text(e: Env, node: BytesN<32>) -> Vec<String> {
-        get_text(&e, &node)
-    }
-
-    pub fn registry(e: Env, node: BytesN<32>) -> Address {
-        get_registry(&e, &node)
-    }
 }

@@ -1,19 +1,15 @@
 #![no_std]
 use core::panic;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
-
-mod registry_contract {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32-unknown-unknown/release/sns_registry.wasm"
-    );
-}
+use sns_registry_interface::SnsRegistryClient;
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, Bytes};
 
 mod events;
 mod test;
 mod testutils;
 
-pub(crate) const BUMP_AMOUNT: u32 = 518400; // 30 days
+pub(crate) const HIGH_BUMP_AMOUNT: u32 = 1036800; // 30 days
+pub(crate) const LOW_BUMP_AMOUNT: u32 = 518400; // 60 days
 pub(crate) const GRACE_PERIOD: u64 = 1555200; // 90 days
 
 #[derive(Clone)]
@@ -22,17 +18,26 @@ pub enum DataKey {
     // Registry Contract Address
     // () => Address
     Registry,
-    // The hash of the tld (eg. .sns) owned by this contract
+    // Resolver Contract Address
+    // () => Address
+    Resolver,
+    // Native Token Contract Address
+    // () => Address
+    NativeToken,
+    // Price per second of the domain
+    // 1.585489599189 for a 5xlm per year domain
+    // () => i128
+    Price,
+    // The hash of the tld (eg. test.sns => sns) owned by this contract
     // () => BytesN<32>
     BaseNode,
-    // Addresses that can call privileged functions
-    // (Address) => bool
-    Controllers(Address),
-    // Owner of the domain
+    // Owners of the sub-domains
+    // The hash of the sub-domain is without the tld (eg test.sns => test)
     // BytesN<32> => Address
     Owners(BytesN<32>),
     // Expirations of the domains
     // pass the hash of the domain and get the expiration time as a timestamp
+    // The hash of the sub-domain is without the tld (eg test.sns => test)
     // BytesN<32> => u64
     Expirations(BytesN<32>),
     // Admin of this contract
@@ -52,13 +57,6 @@ fn get_administrator(e: &Env) -> Address {
         .persistent()
         .get::<_, Address>(&DataKey::Admin)
         .unwrap()
-}
-
-fn get_controller_status(e: &Env, caller: &Address) -> bool {
-    e.storage()
-        .persistent()
-        .get::<_, bool>(&DataKey::Controllers(caller.clone()))
-        .unwrap_or(false)
 }
 
 fn get_domain_owner(e: &Env, node: &BytesN<32>) -> Address {
@@ -85,7 +83,7 @@ fn get_registry_owner(e: &Env) -> Address {
     let base_node = get_base_node(e);
     let registry = get_registry(e);
 
-    let registry_client = registry_contract::Client::new(&e, &registry);
+    let registry_client = SnsRegistryClient::new(&e, &registry);
     registry_client.owner(&base_node)
 }
 
@@ -93,14 +91,37 @@ fn get_base_node(e: &Env) -> BytesN<32> {
     e.storage()
         .persistent()
         .get::<_, BytesN<32>>(&DataKey::BaseNode)
-        .unwrap()
+        .expect("No base node found")
 }
 
 fn get_registry(e: &Env) -> Address {
     e.storage()
         .persistent()
         .get::<_, Address>(&DataKey::Registry)
-        .unwrap()
+        .expect("No registry found")
+}
+
+fn get_resolver(e: &Env) -> Address {
+    e.storage()
+        .persistent()
+        .get::<_, Address>(&DataKey::Resolver)
+        .expect("No resolver found")
+}
+
+fn get_native_token(e: &Env) -> Address {
+    e.storage()
+        .persistent()
+        .get::<_, Address>(&DataKey::NativeToken)
+        .expect("No native token found")
+}
+
+fn get_domain_price(e: &Env, duration: &u64) -> i128 {
+    let price = e
+        .storage()
+        .persistent()
+        .get::<_, i128>(&DataKey::Price)
+        .expect("No domain price found");
+    price * (*duration as i128)
 }
 
 fn has_registry(e: &Env) -> bool {
@@ -110,6 +131,17 @@ fn has_registry(e: &Env) -> bool {
 fn is_name_available(e: &Env, name: &BytesN<32>) -> bool {
     let domain_owner = get_domain_owner(&e, &name);
     domain_owner == e.current_contract_address()
+}
+
+fn convert_u64_to_u32(number: &u64) -> u32 {
+    Some(number.clone() as u32).unwrap_or(u32::MAX)
+}
+
+fn append_hash(env: &Env, parent_hash: &BytesN<32>, leaf_hash: &BytesN<32>) -> BytesN<32> {
+    let mut bytes = Bytes::new(env);
+    bytes.append(&leaf_hash.clone().into());
+    bytes.append(&parent_hash.clone().into());
+    env.crypto().sha256(&bytes)
 }
 
 /*
@@ -128,11 +160,6 @@ fn require_registry_ownership(e: &Env) {
     );
 }
 
-fn require_active_controller(e: &Env, caller: &Address) {
-    let controller_status = get_controller_status(e, caller);
-    assert!(controller_status, "caller is not authorised");
-}
-
 fn require_administrator(e: &Env, caller: &Address) {
     let admin = get_administrator(e);
     assert!(admin == *caller, "caller is not authorised");
@@ -141,56 +168,62 @@ fn require_administrator(e: &Env, caller: &Address) {
 /*
 State Changing Functions
 */
-fn set_controller(e: &Env, caller: &Address, status: &bool) {
-    e.storage()
-        .persistent()
-        .set(&DataKey::Controllers(caller.clone()), status);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Controllers(caller.clone()), BUMP_AMOUNT);
+fn set_domain(e: &Env, node: &BytesN<32>, owner: &Address, expiry: &u64, duration: &u64) {
+    set_domain_owner(&e, &node, &owner, &duration);
+    set_domain_expiry(&e, &node, &expiry, &duration);
 }
 
-fn remove_controller(e: &Env, caller: &Address) {
-    e.storage()
-        .persistent()
-        .remove(&DataKey::Controllers(caller.clone()));
-}
-
-fn set_domain_owner(e: &Env, node: &BytesN<32>, owner: &Address) {
+fn set_domain_owner(e: &Env, node: &BytesN<32>, owner: &Address, duration: &u64) {
+    let expiration_watermark = convert_u64_to_u32(duration);
     e.storage()
         .persistent()
         .set(&DataKey::Owners(node.clone()), owner);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Owners(node.clone()), BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Owners(node.clone()),
+        expiration_watermark,
+        expiration_watermark,
+    );
 }
 
-fn set_domain_expiry(e: &Env, node: &BytesN<32>, expiry: &u64) {
+fn set_domain_expiry(e: &Env, node: &BytesN<32>, expiry: &u64, duration: &u64) {
+    let expiration_watermark = convert_u64_to_u32(duration);
     e.storage()
         .persistent()
         .set(&DataKey::Expirations(node.clone()), expiry);
-    e.storage()
-        .persistent()
-        .bump(&DataKey::Expirations(node.clone()), BUMP_AMOUNT);
+    e.storage().persistent().bump(
+        &DataKey::Expirations(node.clone()),
+        expiration_watermark,
+        expiration_watermark,
+    );
 }
 
 fn set_registry(e: &Env, registry: &Address) {
     e.storage().persistent().set(&DataKey::Registry, registry);
     e.storage()
         .persistent()
-        .bump(&DataKey::Registry, BUMP_AMOUNT);
+        .bump(&DataKey::Registry, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
+fn set_native_token(e: &Env, native_token: &Address) {
+    e.storage()
+        .persistent()
+        .set(&DataKey::NativeToken, native_token);
+    e.storage()
+        .persistent()
+        .bump(&DataKey::Registry, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
+}
 fn set_base_node(e: &Env, base_node: &BytesN<32>) {
     e.storage().persistent().set(&DataKey::BaseNode, base_node);
     e.storage()
         .persistent()
-        .bump(&DataKey::BaseNode, BUMP_AMOUNT);
+        .bump(&DataKey::BaseNode, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 fn set_administrator(e: &Env, caller: &Address) {
     e.storage().persistent().set(&DataKey::Admin, caller);
-    e.storage().persistent().bump(&DataKey::Admin, BUMP_AMOUNT);
+    e.storage()
+        .persistent()
+        .bump(&DataKey::Admin, LOW_BUMP_AMOUNT, HIGH_BUMP_AMOUNT);
 }
 
 #[contract]
@@ -199,32 +232,34 @@ struct SnsRegistrar;
 #[contractimpl]
 #[allow(clippy::needless_pass_by_value)]
 impl SnsRegistrar {
-    pub fn initialize(e: Env, registry: Address, admin: Address, base_node: BytesN<32>) {
+    pub fn initialize(
+        e: Env,
+        registry: Address,
+        admin: Address,
+        resolver: Address,
+        base_node: BytesN<32>,
+        native_token: Address,
+    ) {
         if has_registry(&e) {
             panic!("already initialized")
         }
         set_registry(&e, &registry);
         set_base_node(&e, &base_node);
         set_administrator(&e, &admin);
-    }
+        set_native_token(&e, &native_token);
 
-    pub fn add_controller(e: Env, caller: Address, controller: Address) {
-        caller.require_auth();
-        require_registry_ownership(&e);
-        require_administrator(&e, &caller);
-        set_controller(&e, &controller, &true);
-    }
-
-    pub fn remove_controller(e: Env, caller: Address, controller: Address) {
-        caller.require_auth();
-        require_registry_ownership(&e);
-        require_administrator(&e, &caller);
-        remove_controller(&e, &controller);
+        let registry_client = SnsRegistryClient::new(&e, &registry);
+        registry_client.set_record(
+            &e.current_contract_address(),
+            &base_node,
+            &e.current_contract_address(),
+            &resolver,
+            &u64::MAX,
+        );
     }
 
     pub fn transfer_contract_ownership(e: Env, caller: Address, new_owner: Address) {
         caller.require_auth();
-        require_registry_ownership(&e);
         require_administrator(&e, &caller);
         set_administrator(&e, &new_owner);
     }
@@ -234,16 +269,17 @@ impl SnsRegistrar {
         require_administrator(&e, &caller);
         let base_node = get_base_node(&e);
         let registry = get_registry(&e);
-        let registry_client = registry_contract::Client::new(&e, &registry);
+        let registry_client = SnsRegistryClient::new(&e, &registry);
         registry_client.set_resolver(&e.current_contract_address(), &base_node, &resolver);
     }
 
-    pub fn set_record(e: Env, caller: Address, owner: Address, resolver: Address, ttl: u32) {
+    // Decide whether this is necessary to give the administrator the ability to move the base node to another registrar
+    pub fn set_base_node(e: Env, caller: Address, owner: Address, resolver: Address, ttl: u64) {
         caller.require_auth();
         require_administrator(&e, &caller);
         let base_node = get_base_node(&e);
         let registry = get_registry(&e);
-        let registry_client = registry_contract::Client::new(&e, &registry);
+        let registry_client = SnsRegistryClient::new(&e, &registry);
         registry_client.set_record(
             &e.current_contract_address(),
             &base_node,
@@ -251,22 +287,6 @@ impl SnsRegistrar {
             &resolver,
             &ttl,
         );
-    }
-
-    pub fn name_expiry(e: Env, name: BytesN<32>) -> u64 {
-        get_domain_expiry(&e, &name)
-    }
-
-    pub fn name_owner(e: Env, name: BytesN<32>) -> Address {
-        get_domain_owner(&e, &name)
-    }
-
-    pub fn available(e: Env, name: BytesN<32>) -> bool {
-        is_name_available(&e, &name)
-    }
-
-    pub fn is_controller(e: Env, caller: Address) -> bool {
-        get_controller_status(&e, &caller)
     }
 
     pub fn register(
@@ -277,31 +297,42 @@ impl SnsRegistrar {
         duration: u64,
     ) -> u64 {
         caller.require_auth();
-        // Comment out to allow anyone to register a name
-        // require_active_controller(&e, &caller);
         require_registry_ownership(&e);
         assert!(is_name_available(&e, &name), "name is not available");
 
-        // [todo] test this to see how it works
         let expiry_date = get_ledger_timestamp(&e) + duration;
         if expiry_date + GRACE_PERIOD > u64::MAX {
             panic!("duration is too long");
         }
 
-        set_domain_owner(&e, &name, &owner);
-        set_domain_expiry(&e, &name, &expiry_date);
-
         let base_node = get_base_node(&e);
         let registry = get_registry(&e);
-        let registry_client = registry_contract::Client::new(&e, &registry);
-        registry_client.set_subnode_owner(&e.current_contract_address(), &base_node, &name, &owner);
+        let default_resolver = get_resolver(&e);
+
+        // Transfer the cost of the registration to the contract
+        let native_token_id = get_native_token(&e);
+        let native_token_client = token::Client::new(&e, &native_token_id);
+        let amount = get_domain_price(&e, &duration);
+
+        native_token_client.transfer(&caller, &e.current_contract_address(), &amount);
+
+        set_domain(&e, &name, &owner, &expiry_date, &duration);
+
+        let registry_client = SnsRegistryClient::new(&e, &registry);
+        registry_client.set_subnode_owner(
+            &e.current_contract_address(),
+            &base_node,
+            &name,
+            &owner,
+            &default_resolver,
+            &30,
+        );
 
         expiry_date
     }
 
     pub fn renew(e: Env, caller: Address, name: BytesN<32>, duration: u64) -> u64 {
         caller.require_auth();
-        require_active_controller(&e, &caller);
         require_registry_ownership(&e);
         assert!(!is_name_available(&e, &name), "name is not registered");
 
@@ -317,8 +348,74 @@ impl SnsRegistrar {
             panic!("duration is too long");
         }
 
-        set_domain_expiry(&e, &name, &new_expiry_date);
+        let registry = get_registry(&e);
+        let base_node = get_base_node(&e);
+
+        // Transfer the cost of the registration to the contract
+        let native_token_id = get_native_token(&e);
+        let native_token_client = token::Client::new(&e, &native_token_id);
+        let amount = get_domain_price(&e, &duration);
+        native_token_client.transfer(&caller, &e.current_contract_address(), &amount);
+
+        set_domain_expiry(&e, &name, &new_expiry_date, &duration);
+
+        let registry_client = SnsRegistryClient::new(&e, &registry);
+        registry_client.bump_subnode(
+            &e.current_contract_address(),
+            &base_node,
+            &name,
+            &duration,
+            &GRACE_PERIOD,
+        );
 
         new_expiry_date
+    }
+
+    pub fn transfer(e: Env, caller: Address, name: BytesN<32>, new_owner: Address) {
+        caller.require_auth();
+        require_owner(&e, &name, &caller);
+
+        let registry = get_registry(&e);
+        let base_node = get_base_node(&e);
+
+        // Look into a better way of handling the duration as it doesn't really matter since the domain is not being renewed and already bumped to the expiry date with the grace period
+        set_domain_owner(&e, &name, &new_owner, &600);
+
+        let sub_node = append_hash(&e, &base_node, &name);
+
+        let registry_client = SnsRegistryClient::new(&e, &registry);
+        registry_client.set_owner(
+            &e.current_contract_address(),
+            &sub_node,
+            &new_owner,
+        );
+    }
+
+    pub fn withdraw_funds(e: Env, caller: Address, amount: i128) {
+        caller.require_auth();
+        require_administrator(&e, &caller);
+
+        let native_token_id = get_native_token(&e);
+        let native_token_client = token::Client::new(&e, &native_token_id);
+
+        native_token_client.transfer(&e.current_contract_address(), &caller, &amount);
+    }
+
+    pub fn name_expiry(e: Env, name: BytesN<32>) -> u64 {
+        get_domain_expiry(&e, &name)
+    }
+
+    pub fn name_owner(e: Env, name: BytesN<32>) -> Address {
+        get_domain_owner(&e, &name)
+    }
+
+    pub fn available(e: Env, name: BytesN<32>) -> bool {
+        is_name_available(&e, &name)
+    }
+
+    pub fn withdrawable_balance(e: Env) -> i128 {
+        let native_token_id = get_native_token(&e);
+        let native_token_client = token::Client::new(&e, &native_token_id);
+        native_token_client.balance(&e.current_contract_address())
     }
 }

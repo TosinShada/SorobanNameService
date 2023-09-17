@@ -8,8 +8,6 @@ SOROBAN_RPC_HOST="$2"
 
 IS_USING_DOCKER="$3"
 
-PATH=./target/bin:$PATH
-
 if [[ -f "./.sns-dapp/snsdapp_id" ]]; then
   echo "Found existing './.sns-dapp' directory; already initialized."
   exit 0

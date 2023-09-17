@@ -11,7 +11,7 @@ use soroban_sdk::{
 fn create_sns_contract(e: &Env, admin: &Address) -> SnsRegistry {
     let id = register_sns(e);
     let sns = SnsRegistry::new(e, id.clone());
-    sns.client().initialize(admin);
+    sns.client().initialize(admin, admin);
     sns
 }
 
