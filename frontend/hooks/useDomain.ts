@@ -62,7 +62,7 @@ export function useDomain() {
 
   async function checkDomainStatus(username: string): Promise<void> {
     try {
-      const { available, register } = new registrarContract({
+      const registrar = new registrarContract({
         contractId: registrarNetwork.futurenet.contractId,
         networkPassphrase: registrarNetwork.futurenet.networkPassphrase,
         rpcUrl: 'https://rpc-futurenet.stellar.org:443',
@@ -77,7 +77,7 @@ export function useDomain() {
         .update(username.toLowerCase())
         .digest()
 
-      const domainStatus = await available({
+      const domainStatus = await registrar.available({
         name: domain,
       })
       console.log('Domain status: ', domainStatus)

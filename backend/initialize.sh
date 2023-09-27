@@ -73,8 +73,8 @@ curl --silent -X POST "$FRIENDBOT_URL?addr=$ADMIN_ADDRESS" >/dev/null
 
 ARGS="--network $NETWORK --source token-admin"
 
-echo Build contracts
-make build
+# echo Build contracts
+# make build
 
 echo Deploy the SNS Registry contract
 SNS_REGISTRY_ID="$(

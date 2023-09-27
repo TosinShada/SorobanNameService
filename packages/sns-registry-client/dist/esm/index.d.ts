@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import * as SorobanClient from 'soroban-client';
 import { ContractSpec, Address } from 'soroban-client';
 import { Buffer } from "buffer";
@@ -45,7 +44,7 @@ export declare class Err<E extends Error_ = Error_> implements Result<any, E> {
 export declare const networks: {
     readonly futurenet: {
         readonly networkPassphrase: "Test SDF Future Network ; October 2022";
-        readonly contractId: "CD56WBELGO5BMP6RBWN64RKCT2J6NHMM6SKXKAC5DHWAWHQZ6BJ57BDJ";
+        readonly contractId: "CAAZHBIXVON4YGJKIHY7TETMZ5FQWAX5GXKUQSERPBZG7XFD3YMJPQJJ";
     };
 };
 export type DataKey = {
