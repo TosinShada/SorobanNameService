@@ -1,7 +1,5 @@
 #![cfg(test)]
 
-extern crate std;
-
 use super::testutils::{register_test_contract as register_sns_resolver, SnsResolver};
 use soroban_sdk::{testutils::Address as AddressTestTrait, Address, Bytes, BytesN, Env, String};
 
@@ -55,7 +53,7 @@ fn test_set_name() {
     let registrar_address = &setup.registrar_address;
     let base_node = &setup.base_node;
     let domain_owner = &setup.domain_owner;
-    let label = create_node(&setup.env, "test");
+    let label = create_node(&setup.env, "tosinshada");
     let domain = append_node(&setup.env, &base_node, &label);
 
     resolver
@@ -74,7 +72,7 @@ fn test_set_text() {
     let registrar_address = &setup.registrar_address;
     let base_node = &setup.base_node;
     let text_record = String::from_slice(&setup.env, "wounvuwb3828240482jj");
-    let label = create_node(&setup.env, "test");
+    let label = create_node(&setup.env, "tosinshada");
     let domain = append_node(&setup.env, &base_node, &label);
 
     resolver
